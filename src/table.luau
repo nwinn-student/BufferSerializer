@@ -3,8 +3,6 @@
 local inflate = require("./inflate")
 local link = require("./link")
 local linkType = link.type
-local isLink = link.islink
-local isDuo = link.isduo
 
 type Serialize = (data: any, buf: buffer, pos: number) -> (buffer, number)
 
@@ -279,7 +277,6 @@ function tabDeserializer(buf: buffer, pos: number)
 	local existingIndex = 1
 	local existing: { any } = { [0] = returnedTab }
 	local roundRobinIndex = 61_440
-	local paired = {}
 
 	local deserialTable: (data: { [any]: any }) -> { [any]: any }
 
@@ -314,27 +311,6 @@ function tabDeserializer(buf: buffer, pos: number)
 		local value: any = nil
 		local oldPos = pos
 		local case = linkType(valId)
-
-		if isLink(valId, case) then
-			local isTwo = isDuo(valId, case)
-
-			local pairedValue = paired[valId]
-			if pairedValue then
-				pos += if isTwo then 2 else 1
-				return pairedValue
-			end
-
-			-- read id, then skip to value
-			if isTwo then
-				local id = buffer.readu16(buf, pos)
-				value, pos = deserialSwitch[case](buf, pos + 2)
-				paired[id] = value
-				return value
-			end
-			value, pos = deserialSwitch[case](buf, pos + 1)
-			paired[valId] = value
-			return value
-		end
 
 		value, pos = deserialSwitch[case](buf, pos)
 

@@ -28,6 +28,7 @@ An attacker could modify the number attached to the `duplicate value`
 
 The recommended solution is to use standard security practices when handling the data.
 
+
 #### Userdata Custom Approach
 
 Requires careful handling to ensure custom serialization and
