@@ -7,9 +7,6 @@ This document outlines potential risks associated with the serialization and
 
 ### Back References
 
-There are two approaches that rely on the order of data serialized.  The
- first being `equal_existing` and the second being `pairs`.
-
 The `equal_existing` byte is defined as a way to store a prior unique
  value in a compressed form.  That is, all unique values are input into a
  cache and numbered, should the value appear again, the number associated
@@ -20,12 +17,7 @@ An attacker could modify the number attached to the `equal_existing`
  the attacker could cause an error or freeze to occur when handling the
  deserialized form.
 
-The **legacy** `pairs` bytes rely on the first value, and all identifiers
- technically point to this value and pull it in.  Should the value
- be modified, deserialization will pass.  As with `equal_existing`,
- the attacker could cause errors or freezes to occur.
-
-The recommended solution in both cases is to use standard
+The recommended solution is to use standard
  security practices when handling the data.
 
 #### Userdata Custom Approach
