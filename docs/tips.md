@@ -40,6 +40,8 @@ For network data, or other data that is in-transit and does not require storing,
  into a cheaper form (using 3.).
    - Numbers can be compressed when precision is not important.  Ex: A random number (0-1) can be stored as a byte when we only care about nearest 0.005.
 
-## Using backwards references
+## Avoid using backwards references
 
-Backwards references are <!-- what they are -->.  <!-- What are their limitations -->.
+A backwards reference is a structural value, of type `table` or `userdata`, that is to be serialized that has been serialized **prior**.  There are two types of backwards references, those that are horizontal from a structural standpoint and those that are vertical.  A horizontal reference is a reference that does not contain a reference to itself within its structure, whereas a vertiical reference contains a reference to itself within its structure.  Horizontal references are used to reduce output size, however may be incorrectly assumed to retain the equality relationship upon deserialization.  The values will not have a guaranteed equivalence in their contents, as their identities may differ.  Vertical references should **not** be used, as they may cause an infinite loop.
+
+The references must be utilized in such a way as to ensure that the distance between the initial usage of the value and the reference is less than 4096 unique values.  The aforementioned is a requirement for vertical references.  For horizontal references however, it is only a requirement when the equality relationship must be retained upon deserialization.
