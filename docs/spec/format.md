@@ -139,6 +139,10 @@ An array is a list of elements from index 1 to n where there exist no gaps
 Vectors are immutable storage mediums for three 32-bit floating point numbers
  `(x,y,z)`.
 
+**What are backwards references?**
+
+A backwards reference is a structural value, of type `table` or `userdata`, that is to be serialized that has been serialized **prior**.  There are two types of backwards references, those that are horizontal from a structural standpoint and those that are vertical.  A horizontal reference is a reference that does not contain a reference to itself within its structure, whereas a vertiical reference contains a reference to itself within its structure.  See [tips](../tips.md#avoid-using-backwards-references) for more information regarding how to use the types of references.
+
 **How are cyclic tables stored?**
 
 Values are recorded and any duplicate is fast pathed to avoid re-serializing and
