@@ -79,8 +79,7 @@ end
 --[[
 	Deserializes the provided buffer, producing the value originally serialized.
 
-	- Operates under the assumption that the buffer follows the specified format in
-	 [FORMAT.md](../FORMAT.md).
+	- Operates under the assumption that the buffer follows the specified [format](../spec/format.md).
 	- Capable of deserializing values impossible for `serialize` to produce.
 
 	**Recommendations:**
@@ -102,7 +101,7 @@ end
 	@error Failed to parse built-in vector constant
 	@error Failed to parse vector
 	@error Failed to parse userdata
-	@error Failed to parse custom userdata
+	@error Invalid custom userdata value
 	@error Failed to parse table
 	@error Failed to parse existing value
 	@error Failed to parse nil in a dictionary
@@ -136,24 +135,15 @@ export type UserdataSupport = {
 		 starting at the given position.
 
 		@param value - the userdata to serialize
-		@param buf - the current buffer to store the serialized form in
-		@param pos - the current position
-		@param size - the current size of the buffer
-
-		@return the buffer containing the serialized form
-		@return the starting position for the next item, (1 + position last modified)
-		@return the size of the buffer
+		@param serializer - the function to pass representational values in
 	]]
 	serialize: Serialize,
 	--[[
 		Produces a userdata from the buffer starting at the given position.
 
-		@param buf buffer containing the userdata
-		@param pos the starting position of the userdata
+		@param ... - a tuple of values
 
-		@error buffer access out of bounds
-
-		@return the userdata and the end userdata position + 1
+		@return the userdata
 	]]
 	deserialize: Deserialize,
 }

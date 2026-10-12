@@ -110,12 +110,13 @@ end
 	@param pos the starting position of the userdata
 
 	@error Failed to parse userdata
-	@error Failed to parse custom userdata
+	@error Invalid custom userdata value
 	@error buffer access out of bounds
 
 	@return the userdata and the end of the userdata position + 1
 ]]
 function userDeserializer(buf: buffer, pos: number)
+	local startingPosition = pos
 	-- Possible optim: We actually get the id multiple times for table, can we pass the id?
 	local id = buffer.readu8(buf, pos)
 
@@ -148,8 +149,8 @@ function userDeserializer(buf: buffer, pos: number)
 			-- look at the next header byte
 			inner_id = buffer.readu8(buf, inner_pos)
 		end
-		-- pass the STRUCTEND byte
-		pos = inner_pos + 1
+
+		pos = inner_pos
 	end
 
 	for _, deserializer in supports.deserializers do
@@ -162,13 +163,13 @@ function userDeserializer(buf: buffer, pos: number)
 
 	-- no returning values that cause tables to error
 	if data == nil or data ~= data then
-		local nextId = buffer.readu8(buf, pos + 1)
 		error(
-			`Failed to parse custom userdata using byte: {nextId} at position {pos + 1}`
+			`Invalid custom userdata value: got {data} at position {startingPosition}`
 		)
 	end
 
-	return data, pos
+	-- pass the STRUCTEND byte
+	return data, pos + 1
 end
 
 --[[
@@ -203,19 +204,18 @@ end
 	local sample_id = 0
 
 	BufferSerializer.supportUserdata({
-		serialize = function(value: any, buf: buffer, pos: number)
+		serialize = function(value: any, serializer: (value: any) -> ())
 			if value ~= sample_userdata then
-				return buf, pos
+				return
 			end
-			buffer.writeu8(buf, pos, sample_id)
-			return buf, pos + 1
+			serializer(sample_id)
 		end,
-		deserialize = function(buf: buffer, pos: number)
-			local id = buffer.readu8(buf, pos)
+		deserialize = function(...: any)
+			local id = ...
 			if id == sample_id then
-				return sample_userdata, pos + 1
+				return sample_userdata
 			end
-			return nil, pos
+			return nil
 		end,
 	})
 

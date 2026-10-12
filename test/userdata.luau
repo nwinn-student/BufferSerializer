@@ -15,8 +15,7 @@ local zero_proxy = newproxy()
 test.compare(false, isSupported(proxy))
 
 local function reader(...: any)
-	local args = { ... }
-	local id = args[1]
+	local id = ...
 	if id == 0 then
 		return zero_proxy
 	end
