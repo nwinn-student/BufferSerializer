@@ -131,21 +131,21 @@ end
 ]]
 export type UserdataSupport = {
 	--[[
-		Inserts the serialized form of the value into the provided buffer
-		 starting at the given position.
-
+		Forwards values that can be used to recreate the `value` userdata to the
+		 `serializer` function.
+	
 		@param value - the userdata to serialize
 		@param serializer - the function to pass representational values in
 	]]
-	serialize: Serialize,
+	serialize: (value: any, serializer: (value: any) -> ()) -> (),
 	--[[
-		Produces a userdata from the buffer starting at the given position.
+		Produces a userdata based on a tuple of values.
 
 		@param ... - a tuple of values
 
 		@return the userdata
 	]]
-	deserialize: Deserialize,
+	deserialize: (...any) -> any,
 }
 
 --[[
@@ -180,19 +180,18 @@ export type UserdataSupport = {
 	local sample_id = 0
 
 	BufferSerializer.supportUserdata({
-		serialize = function(value: any, buf: buffer, pos: number)
+		serialize = function(value: any, serializer: (value: any) -> ())
 			if value ~= sample_userdata then
-				return buf, pos
+				return
 			end
-			buffer.writeu8(buf, pos, sample_id)
-			return buf, pos + 1
+			serializer(sample_id)
 		end,
-		deserialize = function(buf: buffer, pos: number)
-			local id = buffer.readu8(buf, pos)
+		deserialize = function(...any)
+			local id = ...
 			if id == sample_id then
-				return sample_userdata, pos + 1
+				return sample_userdata
 			end
-			return nil, pos
+			return nil
 		end,
 	})
 
