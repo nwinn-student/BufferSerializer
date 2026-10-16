@@ -90,8 +90,7 @@ end
 ]]
 function BufferSerializer.deserialize(value: buffer): any
 	local valId = buffer.readu8(value, 0)
-	if valId == 0 then
-	local valId = buffer.readu8(value, 0)
+
 	if valId == 0 then
 		return nil
 	end
