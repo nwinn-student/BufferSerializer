@@ -2,7 +2,6 @@
 --!strict
 local inflate = require("./inflate")
 local link = require("./link")
-local linkType = link.type
 
 local STRUCTEND = 200
 local CUSTOM = 202
@@ -12,47 +11,6 @@ type Support = {
 	serialize: (value: any, serializer: (value: any) -> ()) -> (),
 	deserialize: (...any) -> (),
 }
-
-local serialModules: any
-local deserialModules: any
-
-local function init()
-	serialModules = table.freeze({
-		["nil"] = require("./nil").serialize,
-		boolean = require("./boolean").serialize,
-		buffer = require("./buffer").serialize,
-		string = require("./string").serialize,
-		number = require("./number").serialize,
-		vector = require("./vector").serialize,
-		table = require("./table").serialize,
-		userdata = userSerializer,
-	})
-	deserialModules = table.freeze({
-		["nil"] = require("./nil").deserialize,
-		boolean = require("./boolean").deserialize,
-		buffer = require("./buffer").deserialize,
-		string = require("./string").deserialize,
-		number = require("./number").deserialize,
-		vector = require("./vector").deserialize,
-		table = require("./table").deserialize,
-		userdata = userDeserializer,
-	})
-end
-
-local function globalser(value: any, buf: buffer, pos: number): (buffer, number)
-	if not serialModules then
-		init()
-	end
-
-	return serialModules[type(value)](value, buf, pos)
-end
-local function globaldeser(buf: buffer, pos: number, valId: number): (any, number)
-	if not deserialModules then
-		init()
-	end
-
-	return deserialModules[linkType(valId)](buf, pos)
-end
 
 local supports = {
 	serializers = {},
@@ -79,7 +37,7 @@ function userSerializer(value: any, buf: buffer, pos: number)
 	local temp_buf, temp_pos = buf, pos + 1
 	local function serializationFunc(value: any)
 		assert(not isSupported)
-		temp_buf, temp_pos = globalser(value, temp_buf, temp_pos)
+		temp_buf, temp_pos = link.serializer(value, temp_buf, temp_pos)
 		isSupported = true
 	end
 
@@ -144,7 +102,7 @@ function userDeserializer(buf: buffer, pos: number)
 
 		while inner_id ~= STRUCTEND do
 			local inner_value
-			inner_value, inner_pos = globaldeser(buf, inner_pos, inner_id)
+			inner_value, inner_pos = link.deserializer(buf, inner_pos, inner_id)
 			table.insert(inner_data, inner_value)
 			-- look at the next header byte
 			inner_id = buffer.readu8(buf, inner_pos)

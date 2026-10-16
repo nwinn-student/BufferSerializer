@@ -18,28 +18,6 @@ local BufferSerializer = {}
 
 local link = require("@self/link")
 local userdata = require("@self/userdata")
-local linkType = link.type
-
-local serialModules = table.freeze({
-	["nil"] = require("@self/nil").serialize,
-	boolean = require("@self/boolean").serialize,
-	buffer = require("@self/buffer").serialize,
-	string = require("@self/string").serialize,
-	number = require("@self/number").serialize,
-	vector = require("@self/vector").serialize,
-	table = require("@self/table").serialize,
-	userdata = require("@self/userdata").serialize,
-})
-local deserialModules = table.freeze({
-	["nil"] = require("@self/nil").deserialize,
-	boolean = require("@self/boolean").deserialize,
-	buffer = require("@self/buffer").deserialize,
-	string = require("@self/string").deserialize,
-	number = require("@self/number").deserialize,
-	vector = require("@self/vector").deserialize,
-	table = require("@self/table").deserialize,
-	userdata = require("@self/userdata").deserialize,
-})
 
 type Serialize = (value: any, buf: buffer, pos: number) -> (buffer, number)
 type Deserialize = (buf: buffer, pos: number) -> (any, number)
@@ -69,9 +47,7 @@ function BufferSerializer.serialize(value: any): buffer
 		typeValue = "nil"
 	end
 
-	local serial: Serialize = (serialModules :: any)[typeValue]
-
-	local buf, pos = serial(value, buffer.create(0), 0)
+	local buf, pos = link.serializer(value, buffer.create(0), 0)
 
 	return trim(buf, pos)
 end
@@ -113,16 +89,12 @@ end
 	@return the original value
 ]]
 function BufferSerializer.deserialize(value: buffer): any
-	local pointer = buffer.readu8(value, 0)
-	if pointer == 0 then
+	local valId = buffer.readu8(value, 0)
+	if valId == 0 then
 		return nil
 	end
 
-	pointer = linkType(pointer)
-
-	local deserial: Deserialize = (deserialModules :: any)[pointer]
-
-	return (deserial(value, 0))
+	return (link.deserializer(value, 0, valId))
 end
 
 --[[
