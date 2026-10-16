@@ -51,7 +51,7 @@ local function globaldeser(buf: buffer, pos: number, valId: number): (any, numbe
 		init()
 	end
 
-	return deserialModules[linkType(valId)](buf, pos)
+	return deserialModules[linkType(valId)](buf, pos, valId)
 end
 
 local supports = {

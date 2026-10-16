@@ -227,7 +227,7 @@ end
 function BufferSerializer.isSupported(ud: any): boolean
 	local buf, pos = userdata.serialize(ud, buffer.create(0), 0)
 
-	userdata.deserialize(buf, 0)
+	userdata.deserialize(buf, 0, buffer.readu8(buf, 0))
 	-- Only unsupported userdata can return pos == 1
 	return pos ~= 1
 end
