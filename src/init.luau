@@ -79,7 +79,8 @@ end
 --[[
 	Deserializes the provided buffer, producing the value originally serialized.
 
-	- Operates under the assumption that the buffer follows the specified [format](../spec/format.md).
+	- Operates under the assumption that the buffer follows the specified format in
+	   [spec](../spec/format.md).
 	- Capable of deserializing values impossible for `serialize` to produce.
 
 	**Recommendations:**
@@ -220,7 +221,7 @@ end
 	@param ud the userdata to check
 
 	@error Failed to parse userdata
-	@error Failed to parse custom userdata
+	@error Invalid custom userdata value
 	@error buffer access out of bounds
 ]]
 function BufferSerializer.isSupported(ud: any): boolean
