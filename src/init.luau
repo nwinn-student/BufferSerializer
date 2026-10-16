@@ -42,7 +42,7 @@ local deserialModules = table.freeze({
 })
 
 type Serialize = (value: any, buf: buffer, pos: number) -> (buffer, number)
-type Deserialize = (buf: buffer, pos: number) -> (any, number)
+type Deserialize = (buf: buffer, pos: number, valId: number) -> (any, number)
 
 --[[
 	Serializes the provided value into a buffer.
@@ -113,16 +113,16 @@ end
 	@return the original value
 ]]
 function BufferSerializer.deserialize(value: buffer): any
-	local pointer = buffer.readu8(value, 0)
-	if pointer == 0 then
+	local valId = buffer.readu8(value, 0)
+	if valId == 0 then
 		return nil
 	end
 
-	pointer = linkType(pointer)
+	local pointer = linkType(valId)
 
 	local deserial: Deserialize = (deserialModules :: any)[pointer]
 
-	return (deserial(value, 0))
+	return (deserial(value, 0, valId))
 end
 
 --[[
@@ -227,7 +227,7 @@ end
 function BufferSerializer.isSupported(ud: any): boolean
 	local buf, pos = userdata.serialize(ud, buffer.create(0), 0)
 
-	userdata.deserialize(buf, 0)
+	userdata.deserialize(buf, 0, buffer.readu8(buf, 0))
 	-- Only unsupported userdata can return pos == 1
 	return pos ~= 1
 end

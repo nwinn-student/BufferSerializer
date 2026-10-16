@@ -99,35 +99,33 @@ end
 	@return the number and the end number position + 1
 ]]
 @native
-local function numDeserializer(buf: buffer, pos: number)
-	local id = buffer.readu8(buf, pos)
-
-	if id == ZERO then
+local function numDeserializer(buf: buffer, pos: number, valId: number)
+	if valId == ZERO then
 		return 0, pos + 1
-	elseif id == ONE then
+	elseif valId == ONE then
 		return 1, pos + 1
-	elseif id == NAN then
+	elseif valId == NAN then
 		return 0 / 0, pos + 1
 	end
 
-	if id == BYTE then
+	if valId == BYTE then
 		return buffer.readi8(buf, pos + 1), pos + 2
-	elseif id == CHAR then
+	elseif valId == CHAR then
 		return buffer.readi16(buf, pos + 1), pos + 3
-	elseif id == THREE_BYTE then
+	elseif valId == THREE_BYTE then
 		local val = buffer.readbits(buf, (pos + 1) * 8, 24)
 		if val >= 2 ^ 23 then
 			return (-2 ^ 24) + val, pos + 4
 		end
 		return val, pos + 4
-	elseif id == INT then
+	elseif valId == INT then
 		return buffer.readi32(buf, pos + 1), pos + 5
-	elseif id == FLOAT then
+	elseif valId == FLOAT then
 		return buffer.readf32(buf, pos + 1), pos + 5
-	elseif id == DOUBLE then
+	elseif valId == DOUBLE then
 		return buffer.readf64(buf, pos + 1), pos + 9
 	else
-		error(`Failed to parse number using byte: {id} at position {pos}`)
+		error(`Failed to parse number using byte: {valId} at position {pos}`)
 	end
 end
 
