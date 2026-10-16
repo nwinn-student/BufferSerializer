@@ -13,7 +13,7 @@ return table.freeze({
 		buffer.writeu8(buf, pos, 0)
 		return buf, pos + 1
 	end,
-	deserialize = function(buf: buffer, pos: number)
+	deserialize = function(buf: buffer, pos: number, valId: number)
 		return nil, pos + 1
 	end,
 })

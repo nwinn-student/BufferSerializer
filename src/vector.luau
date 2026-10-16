@@ -202,28 +202,26 @@ end
 	@return the vector and the end vector position + 1
 ]]
 @native
-local function vecDeserializer(buf: buffer, pos: number)
-	local id = buffer.readu8(buf, pos)
-
-	if id == ZERO then
+local function vecDeserializer(buf: buffer, pos: number, valId: number)
+	if valId == ZERO then
 		return vector.zero, pos + 1
-	elseif id == ONE then
+	elseif valId == ONE then
 		return vector.one, pos + 1
-	elseif id == X_AXIS then
+	elseif valId == X_AXIS then
 		return builtinDeserialConst[X_AXIS], pos + 1
-	elseif id == Y_AXIS then
+	elseif valId == Y_AXIS then
 		return builtinDeserialConst[Y_AXIS], pos + 1
-	elseif id == Z_AXIS then
+	elseif valId == Z_AXIS then
 		return builtinDeserialConst[Z_AXIS], pos + 1
-	elseif id == XY_AXIS then
+	elseif valId == XY_AXIS then
 		return builtinDeserialConst[XY_AXIS], pos + 1
-	elseif id == XZ_AXIS then
+	elseif valId == XZ_AXIS then
 		return builtinDeserialConst[XZ_AXIS], pos + 1
-	elseif id == YZ_AXIS then
+	elseif valId == YZ_AXIS then
 		return builtinDeserialConst[YZ_AXIS], pos + 1
 	end
 
-	if id == SCALAR_NUMBER then
+	if valId == SCALAR_NUMBER then
 		local constId = buffer.readu8(buf, pos + 1)
 		local vecVal = builtinDeserialConst[constId]
 		if not vecVal then
@@ -234,23 +232,23 @@ local function vecDeserializer(buf: buffer, pos: number)
 		end
 
 		local numVal
-		numVal, pos = numDeserializer(buf, pos + 2)
+		numVal, pos = numDeserializer(buf, pos + 2, buffer.readu8(buf, pos + 2))
 		return numVal * vecVal, pos
-	elseif id == BYTE then
+	elseif valId == BYTE then
 		return vector.create(
 			buffer.readi8(buf, pos + 1),
 			buffer.readi8(buf, pos + 2),
 			buffer.readi8(buf, pos + 3)
 		),
 			pos + 4
-	elseif id == CHAR then
+	elseif valId == CHAR then
 		return vector.create(
 			buffer.readi16(buf, pos + 1),
 			buffer.readi16(buf, pos + 3),
 			buffer.readi16(buf, pos + 5)
 		),
 			pos + 7
-	elseif id == THREE_BYTE then
+	elseif valId == THREE_BYTE then
 		local xVal = buffer.readbits(buf, (pos + 1) * 8, 24)
 		local yVal = buffer.readbits(buf, (pos + 4) * 8, 24)
 		local zVal = buffer.readbits(buf, (pos + 7) * 8, 24)
@@ -261,22 +259,22 @@ local function vecDeserializer(buf: buffer, pos: number)
 			zVal >= 2 ^ 23 and (-2 ^ 24) + zVal or zVal
 		),
 			pos + 10
-	elseif id == FLOAT then
+	elseif valId == FLOAT then
 		return vector.create(
 			buffer.readf32(buf, pos + 1),
 			buffer.readf32(buf, pos + 5),
 			buffer.readf32(buf, pos + 9)
 		),
 			pos + 13
-	elseif id == NUMBER then
+	elseif valId == NUMBER then
 		local xVal, yVal, zVal
-		xVal, pos = numDeserializer(buf, pos + 1)
-		yVal, pos = numDeserializer(buf, pos)
-		zVal, pos = numDeserializer(buf, pos)
+		xVal, pos = numDeserializer(buf, pos + 1, buffer.readu8(buf, pos + 1))
+		yVal, pos = numDeserializer(buf, pos, buffer.readu8(buf, pos))
+		zVal, pos = numDeserializer(buf, pos, buffer.readu8(buf, pos))
 
 		return vector.create(xVal, yVal, zVal), pos
 	else
-		error(`Failed to parse vector using byte: {id} at position {pos}`)
+		error(`Failed to parse vector using byte: {valId} at position {pos}`)
 	end
 end
 

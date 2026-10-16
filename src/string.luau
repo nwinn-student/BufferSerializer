@@ -62,31 +62,29 @@ end
 	@return the string and the end string position + 1
 ]]
 @native
-local function strDeserializer(buf: buffer, pos: number)
-	local id = buffer.readu8(buf, pos)
-
-	if id == EMPTY then
+local function strDeserializer(buf: buffer, pos: number, valId: number)
+	if valId == EMPTY then
 		return "", pos + 1
 	end
 
-	if id > INT and id <= STRING_15 then
-		return buffer.readstring(buf, pos + 1, id - INT), pos + id - INT + 1
+	if valId > INT and valId <= STRING_15 then
+		return buffer.readstring(buf, pos + 1, valId - INT), pos + valId - INT + 1
 	end
 
-	local lenSize = id - EMPTY
+	local lenSize = valId - EMPTY
 
 	local len: number
 
-	if id == BYTE then
+	if valId == BYTE then
 		len = buffer.readu8(buf, pos + 1)
-	elseif id == CHAR then
+	elseif valId == CHAR then
 		len = buffer.readu16(buf, pos + 1)
-	elseif id == THREE_BYTE then
+	elseif valId == THREE_BYTE then
 		len = buffer.readbits(buf, (pos + 1) * 8, 24)
-	elseif id == INT then
+	elseif valId == INT then
 		len = buffer.readu32(buf, pos + 1)
 	else
-		error(`Failed to parse string using byte: {id} at position {pos}`)
+		error(`Failed to parse string using byte: {valId} at position {pos}`)
 	end
 
 	return buffer.readstring(buf, pos + lenSize + 1, len), pos + len + 1 + lenSize

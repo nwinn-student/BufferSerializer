@@ -54,32 +54,30 @@ return table.freeze({
 
 		@return the buffer and the end buffer position + 1
 	]]
-	deserialize = function(buf: buffer, pos: number)
-		local id = buffer.readu8(buf, pos)
-
-		if id == EMPTY then
+	deserialize = function(buf: buffer, pos: number, valId: number)
+		if valId == EMPTY then
 			return EMPTY_BUFFER, pos + 1
 		end
 
 		pos += 1
 
-		local lenSize = id - EMPTY
+		local lenSize = valId - EMPTY
 
 		local len: number
-		if id == BYTE then
+		if valId == BYTE then
 			len = buffer.readu8(buf, pos)
 			pos += lenSize
-		elseif id == CHAR then
+		elseif valId == CHAR then
 			len = buffer.readu16(buf, pos)
 			pos += lenSize
-		elseif id == THREE_BYTE then
+		elseif valId == THREE_BYTE then
 			len = buffer.readbits(buf, 8 * pos, 24)
 			pos += lenSize
-		elseif id == INT then
+		elseif valId == INT then
 			len = buffer.readu32(buf, pos)
 			pos += lenSize
 		else
-			error(`Failed to parse buffer using byte: {id} at position {pos}`)
+			error(`Failed to parse buffer using byte: {valId} at position {pos}`)
 		end
 
 		local value = buffer.create(len)
