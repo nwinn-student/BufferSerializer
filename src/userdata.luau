@@ -1,18 +1,58 @@
 --!optimize 2
 --!strict
 local inflate = require("./inflate")
+local link = require("./link")
+local linkType = link.type
 
+local STRUCTEND = 200
 local CUSTOM = 202
 local UNSUPPORTED = 203
 
 type Support = {
-	serialize: (
-		udata: any,
-		buf: buffer,
-		pos: number
-	) -> (buffer, number),
-	deserialize: (buf: buffer, pos: number) -> (any?, number),
+	serialize: (value: any, serializer: (value: any) -> ()) -> (),
+	deserialize: (...any) -> (),
 }
+
+local serialModules: any
+local deserialModules: any
+
+local function init()
+	serialModules = table.freeze({
+		["nil"] = require("./nil").serialize,
+		boolean = require("./boolean").serialize,
+		buffer = require("./buffer").serialize,
+		string = require("./string").serialize,
+		number = require("./number").serialize,
+		vector = require("./vector").serialize,
+		table = require("./table").serialize,
+		userdata = userSerializer,
+	})
+	deserialModules = table.freeze({
+		["nil"] = require("./nil").deserialize,
+		boolean = require("./boolean").deserialize,
+		buffer = require("./buffer").deserialize,
+		string = require("./string").deserialize,
+		number = require("./number").deserialize,
+		vector = require("./vector").deserialize,
+		table = require("./table").deserialize,
+		userdata = userDeserializer,
+	})
+end
+
+local function globalser(value: any, buf: buffer, pos: number): (buffer, number)
+	if not serialModules then
+		init()
+	end
+
+	return serialModules[type(value)](value, buf, pos)
+end
+local function globaldeser(buf: buffer, pos: number, valId: number): (any, number)
+	if not deserialModules then
+		init()
+	end
+
+	return deserialModules[linkType(valId)](buf, pos)
+end
 
 local supports = {
 	serializers = {},
@@ -25,7 +65,7 @@ local function writeUnsupported(buf: buffer, pos: number)
 	return buf, pos + 1
 end
 
-local function userSerializer(value: any, buf: buffer, pos: number)
+function userSerializer(value: any, buf: buffer, pos: number)
 	if #supports.serializers == 0 then
 		return writeUnsupported(buf, pos)
 	end
@@ -36,22 +76,31 @@ local function userSerializer(value: any, buf: buffer, pos: number)
 	buf = inflate(buf, pos, 2)
 	buffer.writeu8(buf, pos, CUSTOM)
 
+	local temp_buf, temp_pos = buf, pos + 1
+	local function serializationFunc(value: any)
+		assert(not isSupported)
+		temp_buf, temp_pos = globalser(value, temp_buf, temp_pos)
+		isSupported = true
+	end
+
 	-- this is faster than functions that call functions (since we would need to wrap each)
 	for _, serializer in supports.serializers do
-		local temp_buf, temp_pos = serializer(value, buf, pos + 1)
-		if temp_pos ~= pos + 1 then
-			isSupported = true
+		serializer(value, serializationFunc)
+		if isSupported then
 			end_buf, end_pos = temp_buf, temp_pos
 			break
 		end
 	end
 
-	-- we assume no modifications to the buffer!!
+	-- we know no modifications to the buffer!!
 	if not isSupported then
 		return writeUnsupported(buf, pos)
 	end
 
-	return end_buf, end_pos
+	end_buf = inflate(end_buf, end_pos, 1)
+	buffer.writeu8(end_buf, end_pos, STRUCTEND)
+
+	return end_buf, end_pos + 1
 end
 
 --[[
@@ -61,12 +110,13 @@ end
 	@param pos the starting position of the userdata
 
 	@error Failed to parse userdata
-	@error Failed to parse custom userdata
+	@error Invalid custom userdata value
 	@error buffer access out of bounds
 
 	@return the userdata and the end of the userdata position + 1
 ]]
-local function userDeserializer(buf: buffer, pos: number)
+function userDeserializer(buf: buffer, pos: number)
+	local startingPosition = pos
 	-- Possible optim: We actually get the id multiple times for table, can we pass the id?
 	local id = buffer.readu8(buf, pos)
 
@@ -81,25 +131,45 @@ local function userDeserializer(buf: buffer, pos: number)
 
 	local data = nil
 
+	local inner_data = {}
+	do
+		local inner_pos = pos + 1
+		local inner_id = buffer.readu8(buf, inner_pos)
+
+		-- CUSTOM STRUCTEND, interpretted as unsupported
+		if inner_id == STRUCTEND then
+			local unsupported = newproxy()
+			return unsupported, inner_pos + 1
+		end
+
+		while inner_id ~= STRUCTEND do
+			local inner_value
+			inner_value, inner_pos = globaldeser(buf, inner_pos, inner_id)
+			table.insert(inner_data, inner_value)
+			-- look at the next header byte
+			inner_id = buffer.readu8(buf, inner_pos)
+		end
+
+		pos = inner_pos
+	end
+
 	for _, deserializer in supports.deserializers do
-		local temp_data, temp_pos
-		temp_data, temp_pos = deserializer(buf, pos + 1)
+		local temp_data = deserializer(table.unpack(inner_data))
 		if temp_data ~= nil then
 			data = temp_data
-			pos = temp_pos
 			break
 		end
 	end
 
 	-- no returning values that cause tables to error
 	if data == nil or data ~= data then
-		local nextId = buffer.readu8(buf, pos + 1)
 		error(
-			`Failed to parse custom userdata using byte: {nextId} at position {pos + 1}`
+			`Invalid custom userdata value: got {data} at position {startingPosition}`
 		)
 	end
 
-	return data, pos
+	-- pass the STRUCTEND byte
+	return data, pos + 1
 end
 
 --[[
@@ -134,19 +204,18 @@ end
 	local sample_id = 0
 
 	BufferSerializer.supportUserdata({
-		serialize = function(value: any, buf: buffer, pos: number)
+		serialize = function(value: any, serializer: (value: any) -> ())
 			if value ~= sample_userdata then
-				return buf, pos
+				return
 			end
-			buffer.writeu8(buf, pos, sample_id)
-			return buf, pos + 1
+			serializer(sample_id)
 		end,
-		deserialize = function(buf: buffer, pos: number)
-			local id = buffer.readu8(buf, pos)
+		deserialize = function(...: any)
+			local id = ...
 			if id == sample_id then
-				return sample_userdata, pos + 1
+				return sample_userdata
 			end
-			return nil, pos
+			return nil
 		end,
 	})
 

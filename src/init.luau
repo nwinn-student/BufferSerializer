@@ -80,7 +80,7 @@ end
 	Deserializes the provided buffer, producing the value originally serialized.
 
 	- Operates under the assumption that the buffer follows the specified format in
-	 [FORMAT.md](../FORMAT.md).
+	   [spec](../spec/format.md).
 	- Capable of deserializing values impossible for `serialize` to produce.
 
 	**Recommendations:**
@@ -102,7 +102,7 @@ end
 	@error Failed to parse built-in vector constant
 	@error Failed to parse vector
 	@error Failed to parse userdata
-	@error Failed to parse custom userdata
+	@error Invalid custom userdata value
 	@error Failed to parse table
 	@error Failed to parse existing value
 	@error Failed to parse nil in a dictionary
@@ -132,30 +132,21 @@ end
 ]]
 export type UserdataSupport = {
 	--[[
-		Inserts the serialized form of the value into the provided buffer
-		 starting at the given position.
-
+		Forwards values that can be used to recreate the `value` userdata to the
+		 `serializer` function.
+	
 		@param value - the userdata to serialize
-		@param buf - the current buffer to store the serialized form in
-		@param pos - the current position
-		@param size - the current size of the buffer
-
-		@return the buffer containing the serialized form
-		@return the starting position for the next item, (1 + position last modified)
-		@return the size of the buffer
+		@param serializer - the function to pass representational values in
 	]]
-	serialize: Serialize,
+	serialize: (value: any, serializer: (value: any) -> ()) -> (),
 	--[[
-		Produces a userdata from the buffer starting at the given position.
+		Produces a userdata based on a tuple of values.
 
-		@param buf buffer containing the userdata
-		@param pos the starting position of the userdata
+		@param ... - a tuple of values
 
-		@error buffer access out of bounds
-
-		@return the userdata and the end userdata position + 1
+		@return the userdata
 	]]
-	deserialize: Deserialize,
+	deserialize: (...any) -> any,
 }
 
 --[[
@@ -190,19 +181,18 @@ export type UserdataSupport = {
 	local sample_id = 0
 
 	BufferSerializer.supportUserdata({
-		serialize = function(value: any, buf: buffer, pos: number)
+		serialize = function(value: any, serializer: (value: any) -> ())
 			if value ~= sample_userdata then
-				return buf, pos
+				return
 			end
-			buffer.writeu8(buf, pos, sample_id)
-			return buf, pos + 1
+			serializer(sample_id)
 		end,
-		deserialize = function(buf: buffer, pos: number)
-			local id = buffer.readu8(buf, pos)
+		deserialize = function(...any)
+			local id = ...
 			if id == sample_id then
-				return sample_userdata, pos + 1
+				return sample_userdata
 			end
-			return nil, pos
+			return nil
 		end,
 	})
 
@@ -231,7 +221,7 @@ end
 	@param ud the userdata to check
 
 	@error Failed to parse userdata
-	@error Failed to parse custom userdata
+	@error Invalid custom userdata value
 	@error buffer access out of bounds
 ]]
 function BufferSerializer.isSupported(ud: any): boolean

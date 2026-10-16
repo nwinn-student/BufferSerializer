@@ -34,9 +34,8 @@ The recommended solution is to use standard security practices when handling the
 ### Userdata Custom Approach
 
 Requires careful handling to ensure custom serialization and
- deserialization functions are compatible across versions.  The buffer containing
- the serialization data could be modified illegally, the userdata
- could also be modified.
+ deserialization functions are compatible across versions.  The userdata
+ could be modified illegally.
 
 #### Limitations
 

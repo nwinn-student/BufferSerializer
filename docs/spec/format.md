@@ -90,9 +90,9 @@ VECTOR_NUMBER = "\154"
 VECTOR_SCALAR = "\155"
 
 TABLE = EMPTY_TABLE
-     | (DICT .. (KEY .. VALUE)+ .. TABLEEND)
-     | (ARRAY .. ARRAY_VALUE+ .. TABLEEND)
-     | (TABLESTART .. ARRAY_VALUE+ .. ARRAYEND .. (KEY .. VALUE)+ .. TABLEEND)
+     | (DICT .. (KEY .. VALUE)+ .. STRUCTEND)
+     | (ARRAY .. ARRAY_VALUE+ .. STRUCTEND)
+     | (TABLESTART .. ARRAY_VALUE+ .. ARRAYEND .. (KEY .. VALUE)+ .. STRUCTEND)
 ARRAY_VALUE = VALUE & NIL
 VALUE = ANY_TYPE & ~NIL & EXISTING_SEQUENCE
 KEY = ANY_TYPE & ~INVALID_KEY & EXISTING_SEQUENCE
@@ -106,9 +106,9 @@ EXISTING = "\196"
 DICT = "\197"
 ARRAY = "\198"
 ARRAYEND = "\199"
-TABLEEND = "\200"
+STRUCTEND = "\200"
 
-USERDATA = UNSUPPORTED | CUSTOM .. ANY+
+USERDATA = UNSUPPORTED | CUSTOM .. ANY_TYPE+ .. STRUCTEND
 CUSTOM = "\202"
 UNSUPPORTED = "\203"
 ```
@@ -118,6 +118,7 @@ UNSUPPORTED = "\203"
 `nil`, `boolean`, `buffer`, `string`, `number`, `vector`, `table`, `userdata`
 
 All other types are to be treated as `nil`.
+A `struct` is defined to be a type capable of storing other types, such as `table` or `userdata`.
 
 ### FAQ
 
@@ -236,7 +237,7 @@ Vectors have multiple modes: scalar multiple, multi-set (byte, char, tryte), and
 | 197     | 2 + size | `table`    | An array                                    |
 | 198     | 2 + size | `table`    | A dictionary                                |
 | 199     | 1        | `table`    | Array section terminator                    |
-| 200     | 1        | `table`    | Table terminator                            |
+| 200     | 1        | `struct`   | Structure terminator                        |
 | 201     | 1        | `table`    | **Unknown**                                 |
 | 202     | 1 + size | `userdata` | Custom userdata                             |
 | 203     | 1        | `userdata` | Represents all unsupported userdata         |
