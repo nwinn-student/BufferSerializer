@@ -57,7 +57,7 @@ function link.deserializer(buf: buffer, pos: number, valId: number)
 		userdata = require("./userdata").deserialize,
 	})
 
-	return deserialModules[link.type(valId)](buf, pos)
+	return deserialModules[link.type(valId)](buf, pos, valId)
 end
 
 return table.freeze(link)
