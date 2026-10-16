@@ -115,18 +115,16 @@ end
 
 	@return the userdata and the end of the userdata position + 1
 ]]
-function userDeserializer(buf: buffer, pos: number)
+function userDeserializer(buf: buffer, pos: number, valId: number)
 	local startingPosition = pos
-	-- Possible optim: We actually get the id multiple times for table, can we pass the id?
-	local id = buffer.readu8(buf, pos)
 
-	if id == UNSUPPORTED then
+	if valId == UNSUPPORTED then
 		local unsupported = newproxy()
 		return unsupported, pos + 1
 	end
 
-	if id ~= CUSTOM then
-		error(`Failed to parse userdata using byte: {id} at position {pos}`)
+	if valId ~= CUSTOM then
+		error(`Failed to parse userdata using byte: {valId} at position {pos}`)
 	end
 
 	local data = nil

@@ -6,7 +6,7 @@ local linkType = link.type
 
 type Serialize = (data: any, buf: buffer, pos: number) -> (buffer, number)
 
-type Deserialize = (buf: buffer, pos: number) -> (any, number)
+type Deserialize = (buf: buffer, pos: number, valId: number) -> (any, number)
 
 type Switch<VAR, F> = {
 	[VAR]: F,
@@ -258,20 +258,17 @@ end
 
 	@return the table and the termination position + 1 of the table
 ]]
-function tabDeserializer(buf: buffer, pos: number)
+function tabDeserializer(buf: buffer, pos: number, valId: number)
 	local returnedTab = {}
 
-	do
-		local id = buffer.readu8(buf, pos)
-		if id == EMPTY then
-			return returnedTab, pos + 1
-		end
+	if valId == EMPTY then
+		return returnedTab, pos + 1
+	end
 
-		if id ~= ARRAY and id ~= TABLE and id ~= DICT then
-			error(
-				`Failed to parse table using byte: {id} at position {pos} (expected {ARRAY}, {TABLE}, or {DICT})`
-			)
-		end
+	if valId ~= ARRAY and valId ~= TABLE and valId ~= DICT then
+		error(
+			`Failed to parse table using byte: {valId} at position {pos} (expected {ARRAY}, {TABLE}, or {DICT})`
+		)
 	end
 
 	local existingIndex = 1
@@ -305,14 +302,14 @@ function tabDeserializer(buf: buffer, pos: number)
 		elseif valId == TABLE or valId == ARRAY or valId == DICT then
 			local value = {}
 			existingCache(value)
-			return deserialTable(value)
+			return deserialTable(value, valId)
 		end
 
 		local value: any = nil
 		local oldPos = pos
 		local case = linkType(valId)
 
-		value, pos = deserialSwitch[case](buf, pos)
+		value, pos = deserialSwitch[case](buf, pos, valId)
 
 		if pos - 2 > oldPos then
 			existingCache(value)
@@ -321,29 +318,27 @@ function tabDeserializer(buf: buffer, pos: number)
 	end
 
 	@native
-	function deserialTable(data: { [any]: any }): { [any]: any }
-		local id = buffer.readu8(buf, pos)
-
+	function deserialTable(data: { [any]: any }, valId: number): { [any]: any }
 		pos += 1
 
-		local hasArray = id == ARRAY or id == TABLE
+		local hasArray = valId == ARRAY or valId == TABLE
 
 		if hasArray then
 			local index = 0
 			while true do
-				local valId = buffer.readu8(buf, pos)
+				local inner_id = buffer.readu8(buf, pos)
 
-				if valId == ARRAY_END then
+				if inner_id == ARRAY_END then
 					pos += 1
 					break -- if there is no end, it will error!
 				end
-				if valId == TABLE_END then
+				if inner_id == TABLE_END then
 					pos += 1
 					return data -- for ARRAY
 				end
 
 				index += 1
-				if valId == 0 then
+				if inner_id == 0 then
 					pos += 1
 					continue
 				end
@@ -351,7 +346,7 @@ function tabDeserializer(buf: buffer, pos: number)
 				local value
 
 				-- check if existing
-				if valId == EQ_EXISTING then
+				if inner_id == EQ_EXISTING then
 					local existingId = buffer.readu16(buf, pos + 1)
 					value = existing[existingId]
 					pos += 3
@@ -364,15 +359,15 @@ function tabDeserializer(buf: buffer, pos: number)
 					continue
 				end
 
-				value = deserialCache(valId)
+				value = deserialCache(inner_id)
 
 				data[index] = value
 			end
 		end
 
 		while true do
-			local valId = buffer.readu8(buf, pos)
-			if valId == TABLE_END then
+			local inner_id = buffer.readu8(buf, pos)
+			if inner_id == TABLE_END then
 				pos += 1
 				return data
 			end
@@ -380,7 +375,7 @@ function tabDeserializer(buf: buffer, pos: number)
 			local key, value
 
 			-- check if existing
-			if valId == EQ_EXISTING then
+			if inner_id == EQ_EXISTING then
 				local existingId = buffer.readu16(buf, pos + 1)
 				key = existing[existingId]
 				if key == nil then
@@ -392,13 +387,13 @@ function tabDeserializer(buf: buffer, pos: number)
 			end
 
 			if not key then
-				key = deserialCache(valId)
+				key = deserialCache(inner_id)
 			end
 
-			valId = buffer.readu8(buf, pos)
+			inner_id = buffer.readu8(buf, pos)
 
 			-- check if existing
-			if valId == EQ_EXISTING then
+			if inner_id == EQ_EXISTING then
 				local existingId = buffer.readu16(buf, pos + 1)
 				value = existing[existingId]
 				if value == nil then
@@ -411,13 +406,13 @@ function tabDeserializer(buf: buffer, pos: number)
 				continue
 			end
 
-			value = deserialCache(valId)
+			value = deserialCache(inner_id)
 
 			data[key] = value
 		end
 	end
 
-	local data = deserialTable(returnedTab)
+	local data = deserialTable(returnedTab, valId)
 
 	table.clear(existing)
 

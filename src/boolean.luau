@@ -14,7 +14,7 @@ return table.freeze({
 		buffer.writeu8(buf, pos, if value then 1 else 2)
 		return buf, pos + 1
 	end,
-	deserialize = function(buf: buffer, pos: number)
+	deserialize = function(buf: buffer, pos: number, valId: number)
 		return buffer.readu8(buf, pos) == 1, pos + 1
 	end,
 })
