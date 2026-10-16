@@ -2,49 +2,10 @@
 --!strict
 local inflate = require("./inflate")
 local link = require("./link")
-local linkType = link.type
 
 type Serialize = (data: any, buf: buffer, pos: number) -> (buffer, number)
 
 type Deserialize = (buf: buffer, pos: number, valId: number) -> (any, number)
-
-type Switch<VAR, F> = {
-	[VAR]: F,
-}
-
-local serialSwitch: Switch<string, Serialize> = table.freeze({
-	boolean = require("./boolean").serialize,
-	buffer = require("./buffer").serialize,
-	string = require("./string").serialize,
-	number = require("./number").serialize,
-	vector = require("./vector").serialize,
-	userdata = require("./userdata").serialize,
-}) :: Switch<string, Serialize>
-
-local deserialSwitch: Switch<string, Deserialize> =
-	table.freeze({
-		["nil"] = function(buf: buffer, pos: number)
-			local valId = buffer.readu8(buf, pos)
-
-			-- Dictionary sections cannot store nil
-			if valId == 0 then
-				error(`Failed to parse nil in a dictionary at position {pos}`)
-			end
-
-			local var = if valId < 240 then "future" else "extension"
-			error(`Failed to parse {var} using byte: {valId} at position {pos}`)
-		end,
-		boolean = require("./boolean").deserialize,
-		buffer = require("./buffer").deserialize,
-		string = require("./string").deserialize,
-		number = require("./number").deserialize,
-		vector = require("./vector").deserialize,
-		table = function(buf: buffer, pos: number)
-			local valId = buffer.readu8(buf, pos)
-			error(`Failed to parse table using byte: {valId} at position {pos}`)
-		end,
-		userdata = require("./userdata").deserialize,
-	}) :: Switch<string, Deserialize>
 
 local EMPTY = 194
 local TABLE = 195
@@ -130,7 +91,7 @@ function tabSerializer(value: { [any]: any }, buf: buffer, pos: number)
 		end
 
 		local oldPos = pos
-		buf, pos = serialSwitch[typeName](data, buf, pos)
+		buf, pos = link.serializer(data, buf, pos)
 
 		if pos - oldPos > 2 and data == data then
 			existingCache(data)
@@ -307,9 +268,21 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 
 		local value: any = nil
 		local oldPos = pos
-		local case = linkType(valId)
+		local case = link.type(valId)
 
-		value, pos = deserialSwitch[case](buf, pos, valId)
+		if case == "nil" then
+			-- Dictionary sections cannot store nil
+			if valId == 0 then
+				error(`Failed to parse nil in a dictionary at position {pos}`)
+			end
+
+			local var = if valId < 240 then "future" else "extension"
+			error(`Failed to parse {var} using byte: {valId} at position {pos}`)
+		elseif case == "table" then
+			error(`Failed to parse table using byte: {valId} at position {pos}`)
+		end
+
+		value, pos = link.deserializer(buf, pos, valId)
 
 		if pos - 2 > oldPos then
 			existingCache(value)
