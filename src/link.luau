@@ -46,16 +46,18 @@ function link.serializer(value: any, buf: buffer, pos: number)
 end
 
 function link.deserializer(buf: buffer, pos: number, valId: number)
-	deserialModules = table.freeze({
-		["nil"] = require("./nil").deserialize,
-		boolean = require("./boolean").deserialize,
-		buffer = require("./buffer").deserialize,
-		string = require("./string").deserialize,
-		number = require("./number").deserialize,
-		vector = require("./vector").deserialize,
-		table = require("./table").deserialize,
-		userdata = require("./userdata").deserialize,
-	})
+	if not deserialModules then
+		deserialModules = table.freeze({
+			["nil"] = require("./nil").deserialize,
+			boolean = require("./boolean").deserialize,
+			buffer = require("./buffer").deserialize,
+			string = require("./string").deserialize,
+			number = require("./number").deserialize,
+			vector = require("./vector").deserialize,
+			table = require("./table").deserialize,
+			userdata = require("./userdata").deserialize,
+		})
+	end
 
 	return deserialModules[link.type(valId)](buf, pos, valId)
 end

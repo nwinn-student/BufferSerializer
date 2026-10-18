@@ -361,6 +361,11 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 
 			if not key then
 				key = deserialCache(inner_id)
+				if key == nil then
+					error(`Failed to parse nil in a dictionary at position {pos}`)
+				elseif key ~= key then
+					error(`Failed to parse NaN in a dictionary at position {pos}`)
+				end
 			end
 
 			inner_id = buffer.readu8(buf, pos)
@@ -380,6 +385,11 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 			end
 
 			value = deserialCache(inner_id)
+
+			assert(
+				value ~= nil,
+				`Failed to parse nil in a dictionary at position {pos}`
+			)
 
 			data[key] = value
 		end

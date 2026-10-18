@@ -82,8 +82,7 @@ end
 	@error Failed to parse table
 	@error Failed to parse existing value
 	@error Failed to parse nil in a dictionary
-	@error Failed to parse future
-	@error Failed to parse extension
+	@error Failed to parse NaN in a dictionary at position
 	@error buffer access out of bounds
 
 	@return the original value

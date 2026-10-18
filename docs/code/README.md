@@ -67,8 +67,7 @@ local originData = BufferSerializer.deserialize(serialData)
 - Failed to parse table
 - Failed to parse existing value
 - Failed to parse nil in a dictionary
-- Failed to parse future
-- Failed to parse extension
+- Failed to parse NaN in a dictionary at position
 - buffer access out of bounds
 
 **Returns**
