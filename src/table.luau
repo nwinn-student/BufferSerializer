@@ -264,15 +264,12 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 			local value = {}
 			existingCache(value)
 			return deserialTable(value, valId)
+		elseif valId > EMPTY and valId <= TABLE_END + 1 then
+			error(`Failed to parse table using byte: {valId} at position {pos}`)
 		end
 
 		local value: any = nil
 		local oldPos = pos
-		local case = link.type(valId)
-
-		if case == "table" then
-			error(`Failed to parse table using byte: {valId} at position {pos}`)
-		end
 
 		value, pos = link.deserializer(buf, pos, valId)
 
