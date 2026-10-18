@@ -6,20 +6,8 @@ local link = {}
 type TYPES = "userdata" | "number" | "string" | "vector"
 type SERIALIZABLE_TYPES = TYPES | "boolean" | "buffer" | "nil" | "table"
 
-local STRING_START = 27
-local NUMBER_START = 105
-local VECTOR_START = 157
-local USER_START = 203
-
-local STRING_DUOSTART = 92
-local NUMBER_DUOSTART = 138
-local VECTOR_DUOSTART = 190
-local USER_DUOSTART = 214
-
--- string: 1 to 1343
--- number: 1 to 1055
--- vector: 1 to 1055
--- userdata: 1 to 521
+local serialModules: any
+local deserialModules: any
 
 --[[
 	Returns the type of reference id
@@ -40,32 +28,38 @@ function link.type(refId: number): SERIALIZABLE_TYPES
 		else "nil" -- add more if statements if needed for future
 end
 
---[[
-	Returns whether the byte is linked
+function link.serializer(value: any, buf: buffer, pos: number)
+	if not serialModules then
+		serialModules = table.freeze({
+			["nil"] = require("./nil").serialize,
+			boolean = require("./boolean").serialize,
+			buffer = require("./buffer").serialize,
+			string = require("./string").serialize,
+			number = require("./number").serialize,
+			vector = require("./vector").serialize,
+			table = require("./table").serialize,
+			userdata = require("./userdata").serialize,
+		})
+	end
 
-	@param byte the byte read
-	@param type value type
-]]
-@native
-function link.islink(byte: number, type: SERIALIZABLE_TYPES): boolean
-	return type == "string" and byte > STRING_START
-		or type == "number" and byte > NUMBER_START
-		or type == "vector" and byte > VECTOR_START
-		or type == "userdata" and byte > USER_START
+	return serialModules[type(value)](value, buf, pos)
 end
 
---[[
-	Returns whether the value associated with the link is 2 bytes
+function link.deserializer(buf: buffer, pos: number, valId: number)
+	if not deserialModules then
+		deserialModules = table.freeze({
+			["nil"] = require("./nil").deserialize,
+			boolean = require("./boolean").deserialize,
+			buffer = require("./buffer").deserialize,
+			string = require("./string").deserialize,
+			number = require("./number").deserialize,
+			vector = require("./vector").deserialize,
+			table = require("./table").deserialize,
+			userdata = require("./userdata").deserialize,
+		})
+	end
 
-	@param byte the byte read
-	@param type the value type
-]]
-@native
-function link.isduo(byte: number, type: SERIALIZABLE_TYPES): boolean
-	return type == "string" and byte >= STRING_DUOSTART
-		or type == "number" and byte >= NUMBER_DUOSTART
-		or type == "vector" and byte >= VECTOR_DUOSTART
-		or type == "userdata" and byte >= USER_DUOSTART
+	return deserialModules[link.type(valId)](buf, pos, valId)
 end
 
 link.existingBuffers = {} :: { [buffer]: unknown }

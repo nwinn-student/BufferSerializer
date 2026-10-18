@@ -40,3 +40,8 @@ For network data, or other data that is in-transit and does not require storing,
  into a cheaper form (using 3.).
    - Numbers can be compressed when precision is not important.  Ex: A random number (0-1) can be stored as a byte when we only care about nearest 0.005.
 
+## Avoid using backwards references
+
+See the [format](spec/format.md) specification for the definition of a `backwards reference`.  Horizontal references are used to reduce output size, however may be incorrectly assumed to retain the equality relationship upon deserialization.  The values will not have a guaranteed equivalence in their contents, as their identities may differ.  Vertical references should be used with caution, as they may cause an infinite loop.
+
+The references must be utilized in such a way as to ensure that the distance between the initial usage of the value and the reference is less than 4096 unique values.  The aforementioned is a requirement for vertical references.  For horizontal references however, it is only a requirement when the equality relationship must be retained upon deserialization.

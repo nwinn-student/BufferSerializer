@@ -62,11 +62,12 @@ local originData = BufferSerializer.deserialize(serialData)
 - Failed to parse number
 - Failed to parse built-in vector constant
 - Failed to parse vector
+- Failed to parse userdata
+- Invalid custom userdata value
 - Failed to parse table
 - Failed to parse existing value
 - Failed to parse nil in a dictionary
-- Failed to parse future
-- Failed to parse extension
+- Failed to parse NaN in a dictionary at position
 - buffer access out of bounds
 
 **Returns**
@@ -78,8 +79,8 @@ local originData = BufferSerializer.deserialize(serialData)
 
 ```luau
 type UserdataSupport = {
-    serialize = (value: any, buf: buffer, pos: number) -> (buffer, number),
-    deserialize = (buf: buffer, pos: number) -> (any, number),
+    serialize: (value: any, serializer: (value: any) -> ()) -> (),
+    deserialize: (...any) -> any,
 }
 
 type supportUserdata = (record: UserdataSupport) -> ()
@@ -116,19 +117,18 @@ local sample_userdata = newproxy()
 local sample_id = 0
 
 BufferSerializer.supportUserdata({
-	serialize = function(value: any, buf: buffer, pos: number)
+	serialize = function(value: any, serializer: (value: any) -> ())
 		if value ~= sample_userdata then
-			return buf, pos
+			return
 		end
-		buffer.writeu8(buf, pos, sample_id)
-		return buf, pos + 1
+		serializer(sample_id)
 	end,
-	deserialize = function(buf: buffer, pos: number)
-		local id = buffer.readu8(buf, pos)
+	deserialize = function(...any)
+		local id = ...
 		if id == sample_id then
-			return sample_userdata, pos + 1
+			return sample_userdata
 		end
-		return nil, pos
+		return nil
 	end,
 })
 
@@ -162,5 +162,5 @@ Returns whether the userdata is capable of being serialized and deserialized.
 
 **Errors**
 - Failed to parse userdata
-- Failed to parse custom userdata
+- Invalid custom userdata value
 - buffer access out of bounds

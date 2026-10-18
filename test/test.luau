@@ -254,7 +254,8 @@ function test.inspect<T>(value: T, options: InspectOptions?): (buffer, T)
 	end
 
 	-- if it has failed do we just nogo?
-	local obtainedValue, obtainedDPos = deserial(obtainedBuffer, 1)
+	local obtainedValue, obtainedDPos =
+		deserial(obtainedBuffer, 1, buffer.readu8(obtainedBuffer, 1))
 	if not disableValueComparison then
 		test.compare(value, obtainedValue) -- already prints stuff
 	end

@@ -90,9 +90,9 @@ VECTOR_NUMBER = "\154"
 VECTOR_SCALAR = "\155"
 
 TABLE = EMPTY_TABLE
-     | (DICT .. (KEY .. VALUE)+ .. TABLEEND)
-     | (ARRAY .. ARRAY_VALUE+ .. TABLEEND)
-     | (TABLESTART .. ARRAY_VALUE+ .. ARRAYEND .. (KEY .. VALUE)+ .. TABLEEND)
+     | (DICT .. (KEY .. VALUE)+ .. STRUCTEND)
+     | (ARRAY .. ARRAY_VALUE+ .. STRUCTEND)
+     | (TABLESTART .. ARRAY_VALUE+ .. ARRAYEND .. (KEY .. VALUE)+ .. STRUCTEND)
 ARRAY_VALUE = VALUE & NIL
 VALUE = ANY_TYPE & ~NIL & EXISTING_SEQUENCE
 KEY = ANY_TYPE & ~INVALID_KEY & EXISTING_SEQUENCE
@@ -106,9 +106,9 @@ EXISTING = "\196"
 DICT = "\197"
 ARRAY = "\198"
 ARRAYEND = "\199"
-TABLEEND = "\200"
+STRUCTEND = "\200"
 
-USERDATA = UNSUPPORTED | CUSTOM .. ANY+
+USERDATA = UNSUPPORTED | CUSTOM .. ANY_TYPE+ .. STRUCTEND
 CUSTOM = "\202"
 UNSUPPORTED = "\203"
 ```
@@ -118,6 +118,7 @@ UNSUPPORTED = "\203"
 `nil`, `boolean`, `buffer`, `string`, `number`, `vector`, `table`, `userdata`
 
 All other types are to be treated as `nil`.
+A `struct` is defined to be a type capable of storing other types, such as `table` or `userdata`.
 
 ### FAQ
 
@@ -138,6 +139,10 @@ An array is a list of elements from index 1 to n where there exist no gaps
 
 Vectors are immutable storage mediums for three 32-bit floating point numbers
  `(x,y,z)`.
+
+**What are backwards references?**
+
+A backwards reference is a structural value, of type `table` or `userdata`, that is to be serialized that has been serialized **prior**.  There are two types of backwards references, those that are horizontal from a structural standpoint and those that are vertical.  A horizontal reference is a reference that does not contain a reference to itself within its structure, whereas a vertiical reference contains a reference to itself within its structure.  See [tips](../tips.md#avoid-using-backwards-references) for more information regarding how to use the types of references.
 
 **How are cyclic tables stored?**
 
@@ -204,8 +209,7 @@ Duplicate values are those that reference the same object in memory (`foo[bar] =
 | 25      | 14       | `string`   | A string of size 13                         |
 | 26      | 15       | `string`   | A string of size 14                         |
 | 27      | 16       | `string`   | A string of size 15                         |
-| 28-91   | 1        | `string`   | [Legacy] The id for a paired string value   |
-| 92-96   | 2        | `string`   | [Legacy] The id for a paired string value   |
+| 28-96   | 0        | `string`   | **Unknown**                                 |
 | 97      | 1        | `number`   | The constant `0`                            |
 | 98      | 1        | `number`   | The constant `1`                            |
 | 99      | 2        | `number`   | An integer between -2^7 and 2^7-1           |
@@ -215,8 +219,7 @@ Duplicate values are those that reference the same object in memory (`foo[bar] =
 | 103     | 5        | `number`   | A 32-bit floating point                     |
 | 104     | 9        | `number`   | A 64-bit floating point                     |
 | 105     | 1        | `number`   | The constant `NaN` or `0 / 0`               |
-| 106-137 | 1        | `number`   | [Legacy] The id for a paired number value   |
-| 138-141 | 2        | `number`   | [Legacy] The id for a paired number value   |
+| 106-141 | 0        | `number`   | **Unknown**                                 |
 | 142     | 1        | `vector`   | The constant `(0,0,0)`                      |
 | 143     | 1        | `vector`   | The constant `(1,1,1)`                      |
 | 144     | 1        | `vector`   | The constant `(1,0,0)`                      |
@@ -231,20 +234,17 @@ Duplicate values are those that reference the same object in memory (`foo[bar] =
 | 153     | 13       | `vector`   | A vector with 32-bit floating points        |
 | 154     | 4-15     | `vector`   | A vector with different types               |
 | 155     | 3-7      | `vector`   | A multiple of a constant vector             |
-| 156-157 | 0        | `vector`   | **Unknown**                                 |
-| 158-189 | 1        | `vector`   | [Legacy] The id for a paired vector value   |
-| 190-193 | 2        | `vector`   | [Legacy] The id for a paired vector value   |
+| 156-193 | 0        | `vector`   | **Unknown**                                 |
 | 194     | 1        | `table`    | The constant `{}`                           |
 | 195     | 3 + size | `table`    | A mixed table                               |
 | 196     | 3        | `table`    | Duplicate value                             |
 | 197     | 2 + size | `table`    | An array                                    |
 | 198     | 2 + size | `table`    | A dictionary                                |
 | 199     | 1        | `table`    | Array section terminator                    |
-| 200     | 1        | `table`    | Table terminator                            |
+| 200     | 1        | `struct`   | Structure terminator                        |
 | 201     | 1        | `table`    | **Unknown**                                 |
 | 202     | 1 + size | `userdata` | Custom userdata                             |
 | 203     | 1        | `userdata` | Represents all unsupported userdata         |
-| 204-213 | 1        | `userdata` | [Legacy] The id for a paired userdata value |
-| 214-215 | 2        | `userdata` | [Legacy] The id for a paired userdata value |
+| 204-215 | 0        | `userdata` | **Unknown**                                 |
 | 216-239 | 0        | `future`   | Reserved for new types or expansions        |
 | 240-255 | 0        | `extend`   | Reserved for extenders                      |
