@@ -270,15 +270,7 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 		local oldPos = pos
 		local case = link.type(valId)
 
-		if case == "nil" then
-			-- Dictionary sections cannot store nil
-			if valId == 0 then
-				error(`Failed to parse nil in a dictionary at position {pos}`)
-			end
-
-			local var = if valId < 240 then "future" else "extension"
-			error(`Failed to parse {var} using byte: {valId} at position {pos}`)
-		elseif case == "table" then
+		if case == "table" then
 			error(`Failed to parse table using byte: {valId} at position {pos}`)
 		end
 
