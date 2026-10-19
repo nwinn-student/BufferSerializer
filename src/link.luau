@@ -6,8 +6,26 @@ local link = {}
 type TYPES = "userdata" | "number" | "string" | "vector"
 type SERIALIZABLE_TYPES = TYPES | "boolean" | "buffer" | "nil" | "table"
 
+type SerExisting = {
+	index: number,
+	data: { [any]: number },
+	-- round robin
+	rr_index: number,
+	rr_length: number,
+	rr_data: { [number]: any },
+}
+type DeserExisting = {
+	index: number,
+	data: { any },
+	-- round robin
+	rr_index: number,
+}
+
+const inflate = require("./inflate")
 local serialModules: any
 local deserialModules: any
+
+const DUPLICATE_VALUE = 196
 
 --[[
 	Returns the type of reference id
@@ -28,7 +46,7 @@ function link.type(refId: number): SERIALIZABLE_TYPES
 		else "nil" -- add more if statements if needed for future
 end
 
-function link.serializer(value: any, buf: buffer, pos: number)
+function link.getSerializer(value: any)
 	if not serialModules then
 		serialModules = table.freeze({
 			["nil"] = require("./nil").serialize,
@@ -37,12 +55,75 @@ function link.serializer(value: any, buf: buffer, pos: number)
 			string = require("./string").serialize,
 			number = require("./number").serialize,
 			vector = require("./vector").serialize,
-			table = require("./table").serialize,
-			userdata = require("./userdata").serialize,
+			table = (require("./table") :: any).serialize,
+			userdata = (require("./userdata") :: any).serialize,
 		})
 	end
 
-	return serialModules[type(value)](value, buf, pos)
+
+	local existingIndex = 1
+	const existing: { [any]: number } = { [value] = 0 }
+	-- round robin
+	const roundRobinCache: { [number]: any } = {}
+	local roundRobinLength = 0
+	local roundRobinIndex = 61_440
+
+	@native
+	local function existingCache(value: any)
+		if existingIndex < 61_440 then
+			-- cache for rest (only 61_440 values we can cache!!)
+			-- for duration of table
+			-- value == value checks for nans :>
+			existing[value] = existingIndex
+			existingIndex += 1
+			return
+		end
+		if roundRobinLength == 4096 then
+			if roundRobinIndex == 65_536 then
+				roundRobinIndex = 61_440
+			end
+			-- Cycle time
+			existing[value] = roundRobinIndex
+			existing[roundRobinCache[roundRobinIndex - 61_439]] = nil
+			roundRobinCache[roundRobinIndex - 61_439] = value
+			roundRobinIndex += 1
+			return
+		end
+		existing[value] = 61_440 + roundRobinLength
+		roundRobinLength += 1
+		roundRobinCache[roundRobinLength] = value
+	end
+
+	local function perform_cache(value: any, buf: buffer, pos: number)
+		local cached = existing[value]
+		if cached then
+			buf = inflate(buf, pos, 3)
+			buffer.writeu8(buf, pos, DUPLICATE_VALUE)
+			buffer.writeu16(buf, pos + 1, cached)
+			pos += 3
+		end
+		return buf, pos
+	end
+	return table.freeze({
+		-- So we don't need to add it to serialize?
+		-- actually make it a fast/slow path thing instead.
+		-- TODO: ^
+		cache_lookup_and_add = perform_cache,
+		serialize = function(value: any, buf: buffer, pos: number, typeName: string)
+
+			local init_pos = pos
+
+			-- TODO: Needs to pass itself
+			buf, pos = serialModules[typeName](value, buf, pos)
+
+			if pos - init_pos > 2 and value == value then
+				existingCache(value)
+			end
+
+			return buf, pos
+		end ,
+		append_cache = existingCache,
+	})
 end
 
 function link.deserializer(buf: buffer, pos: number, valId: number)
@@ -54,14 +135,12 @@ function link.deserializer(buf: buffer, pos: number, valId: number)
 			string = require("./string").deserialize,
 			number = require("./number").deserialize,
 			vector = require("./vector").deserialize,
-			table = require("./table").deserialize,
-			userdata = require("./userdata").deserialize,
+			table = (require("./table") :: any).deserialize,
+			userdata = (require("./userdata") :: any).deserialize,
 		})
 	end
 
 	return deserialModules[link.type(valId)](buf, pos, valId)
 end
-
-link.existingBuffers = {} :: { [buffer]: unknown }
 
 return table.freeze(link)

@@ -47,7 +47,9 @@ function BufferSerializer.serialize(value: any): buffer
 		typeValue = "nil"
 	end
 
-	local buf, pos = link.serializer(value, buffer.create(0), 0)
+	local serializer = link.getSerializer()
+
+	local buf, pos = serializer.serialize(value, buffer.create(0), 0, typeValue)
 
 	return trim(buf, pos)
 end

@@ -1,8 +1,6 @@
 --!optimize 2
 --!strict
 
-local existingBuffers = require("./link").existingBuffers
-
 local function inflateInternal(data: buffer, size: number)
 	if size <= buffer.len(data) then
 		return data
@@ -11,9 +9,6 @@ local function inflateInternal(data: buffer, size: number)
 	local newBuffer = buffer.create(size)
 
 	buffer.copy(newBuffer, 0, data)
-
-	existingBuffers[newBuffer] = existingBuffers[data]
-	existingBuffers[data] = nil
 
 	return newBuffer
 end
