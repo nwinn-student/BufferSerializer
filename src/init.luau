@@ -49,7 +49,7 @@ function BufferSerializer.serialize(value: any): buffer
 
 	local serializer = link.getSerializer()
 
-	local buf, pos = serializer.serialize(value, buffer.create(0), 0, typeValue)
+	local buf, pos = serializer(value, buffer.create(0), 0, typeValue)
 
 	return trim(buf, pos)
 end
