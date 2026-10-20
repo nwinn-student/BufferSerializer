@@ -2,26 +2,10 @@
 --!strict
 local inflate = require("./inflate")
 local link = require("./link")
-local existingBuffers = link.existingBuffers
 
 type Serialize = (data: any, buf: buffer, pos: number) -> (buffer, number)
 
 type Deserialize = (buf: buffer, pos: number, valId: number) -> (any, number)
-
-type SerExisting = {
-	index: number,
-	data: { [any]: number },
-	-- round robin
-	rr_index: number,
-	rr_length: number,
-	rr_data: { [number]: any },
-}
-type DeserExisting = {
-	index: number,
-	data: { any },
-	-- round robin
-	rr_index: number,
-}
 
 local EMPTY = 194
 local TABLE = 195
@@ -40,107 +24,81 @@ local function isEmpty(value: { [any]: any })
 	return cond
 end
 
-function tabSerializer(value: { [any]: any }, buf: buffer, pos: number)
+function tabSerializer(
+	value: { [any]: any },
+	buf: buffer,
+	pos: number,
+	serializer: (
+		value: any,
+		buf: buffer,
+		pos: number,
+		typeName: string
+	) -> (buffer, number)
+)
 	if isEmpty(value) then
 		buf = inflate(buf, pos, 1)
 		buffer.writeu8(buf, pos, EMPTY)
 		return buf, pos + 1
 	end
 
-	local serialTable: (data: { [any]: any }) -> ()
+	local isDict = #value == 0
+	local tableHeaderPos = pos
 
-	@native
-	local function serialInnerTable(data: any, typeName: string)
-		if typeName ~= "table" then
-			return false
-		end
+	buf = inflate(buf, pos, 1)
 
-		-- ISSUE: A table cycle may be so deep that it bypasses existing altogether
-		-- We will need to ensure the cycle is nonproblematic
-		-- Currently: Assumed improbable
+	-- shift for initial pos to be written to later
+	pos += 1
 
-		serializer.append_cache(data)
+	local endArray = false
+	local lastIndex = 1
 
-		if isEmpty(data) then
-			buf = inflate(buf, pos, 1)
-			buffer.writeu8(buf, pos, EMPTY)
-			pos += 1
-			return true
-		end
-
-		serialTable(data)
-		return true
-	end
-
-	@native
-	function serialTable(data: { [any]: any })
-		local isDict = #data == 0
-		buf = inflate(buf, pos, 1)
-
-		pos += 1
-
-		local oldPos = pos
-		local endArray = false
-		local lastIndex = 1
-
-		for key, element in data do
-			-- Array section
-			if lastIndex == key then
-				lastIndex += 1
-
-				local typeElement = type(element)
-
-				if typeElement == "function" or typeElement == "thread" then
-					pos += 1
-					continue
-				end
-
-				if not serialInnerTable(element, typeElement) then
-					serializer.serialize(element, buf, pos, typeElement)
-				end
-
-				continue
-			end
-			if not endArray and not isDict then
-				endArray = true
-				buf = inflate(buf, pos, 1)
-				buffer.writeu8(buf, pos, ARRAY_END)
-				pos += 1
-			end
-
-			-- Dictionary section
-			local typeKey = type(key)
-			if typeKey == "function" or typeKey == "thread" then
-				continue
-			end
+	for key, element in value do
+		-- Array section
+		if lastIndex == key then
+			lastIndex += 1
 
 			local typeElement = type(element)
+
 			if typeElement == "function" or typeElement == "thread" then
+				pos += 1
 				continue
 			end
 
-			if not serialInnerTable(key, typeKey) then
-				buf, pos = serializer.serialize(key, buf, pos, typeKey)
-			end
+			serializer(element, buf, pos, typeElement)
 
-			if not serialInnerTable(element, typeElement) then
-				buf, pos = serializer.serialize(element, buf, pos, typeElement)
-			end
+			continue
+		end
+		if not endArray and not isDict then
+			endArray = true
+			buf = inflate(buf, pos, 1)
+			buffer.writeu8(buf, pos, ARRAY_END)
+			pos += 1
 		end
 
-		if isDict then
-			buffer.writeu8(buf, oldPos - 1, DICT)
-		else
-			buffer.writeu8(buf, oldPos - 1, if not endArray then ARRAY else TABLE)
+		-- Dictionary section
+		local typeKey = type(key)
+		if typeKey == "function" or typeKey == "thread" then
+			continue
 		end
-		buf = inflate(buf, pos, 1)
-		buffer.writeu8(buf, pos, TABLE_END)
-		pos += 1
+
+		local typeElement = type(element)
+		if typeElement == "function" or typeElement == "thread" then
+			continue
+		end
+
+		buf, pos = serializer(key, buf, pos, typeKey)
+		buf, pos = serializer(element, buf, pos, typeElement)
 	end
 
-	serialTable(value)
+	if isDict then
+		buffer.writeu8(buf, tableHeaderPos, DICT)
+	else
+		buffer.writeu8(buf, tableHeaderPos, if not endArray then ARRAY else TABLE)
+	end
+	buf = inflate(buf, pos, 1)
+	buffer.writeu8(buf, pos, TABLE_END)
 
-	return buf, pos
+	return buf, pos + 1
 end
 
 --[[

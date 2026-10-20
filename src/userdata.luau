@@ -23,7 +23,17 @@ local function writeUnsupported(buf: buffer, pos: number)
 	return buf, pos + 1
 end
 
-function userSerializer(value: any, buf: buffer, pos: number)
+function userSerializer(
+	value: any,
+	buf: buffer,
+	pos: number,
+	serializer: (
+		value: any,
+		buf: buffer,
+		pos: number,
+		typeName: string
+	) -> (buffer, number)
+)
 	if #supports.serializers == 0 then
 		return writeUnsupported(buf, pos)
 	end
@@ -37,7 +47,7 @@ function userSerializer(value: any, buf: buffer, pos: number)
 	local temp_buf, temp_pos = buf, pos + 1
 	local function serializationFunc(value: any)
 		assert(not isSupported)
-		temp_buf, temp_pos = link.serializer(value, temp_buf, temp_pos)
+		temp_buf, temp_pos = serializer(value, temp_buf, temp_pos, type(value))
 		isSupported = true
 	end
 

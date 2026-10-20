@@ -68,7 +68,7 @@ function link.getSerializer()
 	local roundRobinIndex = 61_440
 
 	@native
-	local function existingCache(value: any)
+	local function append_cache(value: any)
 		if existingIndex < 61_440 then
 			-- cache for rest (only 61_440 values we can cache!!)
 			-- for duration of table
@@ -104,32 +104,32 @@ function link.getSerializer()
 		return buf, pos
 	end
 
-	return table.freeze({
-		serialize = function(
-			value: any,
-			buf: buffer,
-			pos: number,
-			typeName: string
-		)
-			buf, pos = perform_cache(value, buf, pos)
+	@native
+	local function serializer(
+		value: any,
+		buf: buffer,
+		pos: number,
+		typeName: string
+	)
+		buf, pos = perform_cache(value, buf, pos)
 
-			local init_pos = pos
+		local init_pos = pos
 
-			-- TODO: Needs to pass itself
-			buf, pos = serialModules[typeName](value, buf, pos)
+		buf, pos = serialModules[typeName](value, buf, pos, serializer)
 
-			if
-				(pos - init_pos > 2 and value == value)
-				-- struct/reference value types
-				or (typeName == "table" or typeName == "userdata")
-			then
-				existingCache(value)
-			end
+		if
+			-- non-NaN, and stored as 3+ bytes
+			(pos - init_pos > 2 and value == value)
+			-- struct/reference value types
+			or (typeName == "table" or typeName == "userdata")
+		then
+			append_cache(value)
+		end
 
-			return buf, pos
-		end,
-		append_cache = existingCache,
-	})
+		return buf, pos
+	end
+
+	return serializer
 end
 
 function link.deserializer(buf: buffer, pos: number, valId: number)
