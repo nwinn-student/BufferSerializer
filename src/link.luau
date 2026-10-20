@@ -21,11 +21,11 @@ type DeserExisting = {
 	rr_index: number,
 }
 
-const inflate = require("./inflate")
+local inflate = require("./inflate")
 local serialModules: any
 local deserialModules: any
 
-const DUPLICATE_VALUE = 196
+local DUPLICATE_VALUE = 196
 
 --[[
 	Returns the type of reference id
@@ -46,7 +46,7 @@ function link.type(refId: number): SERIALIZABLE_TYPES
 		else "nil" -- add more if statements if needed for future
 end
 
-function link.getSerializer(value: any)
+function link.getSerializer()
 	if not serialModules then
 		serialModules = table.freeze({
 			["nil"] = require("./nil").serialize,
@@ -60,11 +60,10 @@ function link.getSerializer(value: any)
 		})
 	end
 
-
-	local existingIndex = 1
-	const existing: { [any]: number } = { [value] = 0 }
+	local existingIndex = 0
+	local existing: { [any]: number } = {}
 	-- round robin
-	const roundRobinCache: { [number]: any } = {}
+	local roundRobinCache: { [number]: any } = {}
 	local roundRobinLength = 0
 	local roundRobinIndex = 61_440
 
@@ -104,24 +103,31 @@ function link.getSerializer(value: any)
 		end
 		return buf, pos
 	end
+
 	return table.freeze({
-		-- So we don't need to add it to serialize?
-		-- actually make it a fast/slow path thing instead.
-		-- TODO: ^
-		cache_lookup_and_add = perform_cache,
-		serialize = function(value: any, buf: buffer, pos: number, typeName: string)
+		serialize = function(
+			value: any,
+			buf: buffer,
+			pos: number,
+			typeName: string
+		)
+			buf, pos = perform_cache(value, buf, pos)
 
 			local init_pos = pos
 
 			-- TODO: Needs to pass itself
 			buf, pos = serialModules[typeName](value, buf, pos)
 
-			if pos - init_pos > 2 and value == value then
+			if
+				(pos - init_pos > 2 and value == value)
+				-- struct/reference value types
+				or (typeName == "table" or typeName == "userdata")
+			then
 				existingCache(value)
 			end
 
 			return buf, pos
-		end ,
+		end,
 		append_cache = existingCache,
 	})
 end
