@@ -115,14 +115,21 @@ function link.getSerializer()
 
 		local init_pos = pos
 
+		-- struct/reference value types
+		if typeName == "table" or typeName == "userdata" then
+			append_cache(value)
+			-- TODO: Add to open-ref
+		end
+
 		buf, pos = serialModules[typeName](value, buf, pos, serializer)
 
-		if
-			-- non-NaN, and stored as 3+ bytes
-			(pos - init_pos > 2 and value == value)
-			-- struct/reference value types
-			or (typeName == "table" or typeName == "userdata")
-		then
+		if typeName == "table" or typeName == "userdata" then
+			-- TODO: Add to close-ref
+			return buf, pos
+		end
+
+		-- non-NaN, and stored as 3+ bytes
+		if pos - init_pos > 2 and value == value then
 			append_cache(value)
 		end
 
@@ -144,6 +151,25 @@ function link.deserializer(buf: buffer, pos: number, valId: number)
 			table = (require("./table") :: any).deserialize,
 			userdata = (require("./userdata") :: any).deserialize,
 		})
+	end
+
+	local existingIndex = 0
+	local existing: { any } = {}
+	local roundRobinIndex = 61_440
+
+	@native
+	local function append_cache(data: any)
+		if existingIndex < 61_440 then
+			existing[existingIndex] = data
+			existingIndex += 1
+			return
+		end
+		if roundRobinIndex == 65_536 then
+			roundRobinIndex = 61_440
+		end
+		-- Cycle time
+		existing[roundRobinIndex] = data
+		roundRobinIndex += 1
 	end
 
 	return deserialModules[link.type(valId)](buf, pos, valId)
