@@ -15,185 +15,90 @@ local DICT = 198
 local ARRAY_END = 199
 local TABLE_END = 200
 
-function tabSerializer(value: { [any]: any }, buf: buffer, pos: number)
-	do
-		local isEmpty = true
-		for _, _ in value do
-			isEmpty = false
-			break
-		end
-		if isEmpty then
-			buf = inflate(buf, pos, 1)
-			buffer.writeu8(buf, pos, EMPTY)
-			return buf, pos + 1
-		end
+local function isEmpty(value: { [any]: any })
+	local cond = true
+	for _, _ in value do
+		cond = false
+		break
 	end
+	return cond
+end
 
-	local existingIndex = 1
-	local existing: { [any]: number } = { [value] = 0 }
-	local roundRobinCache: { [number]: any } = {}
-	local roundRobinLength = 0
-	local roundRobinIndex = 61440
-
-	local serialTable: (data: { [any]: any }) -> ()
-
-	@native
-	local function existingCache(data: any)
-		if existingIndex < 61_440 then
-			-- cache for rest (only 61_440 values we can cache!!)
-			-- for duration of table
-			-- data == data checks for nans :>
-			existing[data] = existingIndex
-			existingIndex += 1
-			return
-		end
-		if roundRobinLength == 4096 then
-			if roundRobinIndex == 65_536 then
-				roundRobinIndex = 61_440
-			end
-			-- Cycle time
-			existing[data] = roundRobinIndex
-			existing[roundRobinCache[roundRobinIndex - 61_439]] = nil
-			roundRobinCache[roundRobinIndex - 61_439] = data
-			roundRobinIndex += 1
-			return
-		end
-		existing[data] = 61_440 + roundRobinLength
-		roundRobinLength += 1
-		roundRobinCache[roundRobinLength] = data
-	end
-
-	@native
-	local function serialCache(data: any, typeName: string)
-		if typeName == "table" then
-			-- ISSUE: A table cycle may be so deep that it bypasses existing altogether
-			-- We will need to ensure the cycle is nonproblematic
-			-- Currently: Assumed improbable
-
-			existingCache(data)
-
-			do
-				local isEmpty = true
-				for _, _ in data :: { [any]: any } do
-					isEmpty = false
-					break
-				end
-				if isEmpty then
-					buf = inflate(buf, pos, 1)
-					buffer.writeu8(buf, pos, EMPTY)
-					pos += 1
-					return
-				end
-			end
-
-			serialTable(data)
-			return
-		end
-
-		local oldPos = pos
-		buf, pos = link.serializer(data, buf, pos)
-
-		if pos - oldPos > 2 and data == data then
-			existingCache(data)
-		end
-	end
-
-	@native
-	function serialTable(data: { [any]: any })
-		local isDict = #data == 0
+function tabSerializer(
+	value: { [any]: any },
+	buf: buffer,
+	pos: number,
+	serializer: (
+		value: any,
+		buf: buffer,
+		pos: number,
+		typeName: string
+	) -> (buffer, number)
+)
+	if isEmpty(value) then
 		buf = inflate(buf, pos, 1)
+		buffer.writeu8(buf, pos, EMPTY)
+		return buf, pos + 1
+	end
 
-		pos += 1
+	local isDict = #value == 0
+	local tableHeaderPos = pos
 
-		local oldPos = pos
-		local endArray = false
-		local lastIndex = 1
+	buf = inflate(buf, pos, 1)
 
-		for key, element in data do
-			-- Array section
-			if lastIndex == key then
-				lastIndex += 1
+	-- shift for initial pos to be written to later
+	pos += 1
 
-				local cached = existing[element]
-				if cached then
-					buf = inflate(buf, pos, 3)
-					buffer.writeu8(buf, pos, EQ_EXISTING)
-					buffer.writeu16(buf, pos + 1, cached)
-					pos += 3
-					continue
-				end
+	local endArray = false
+	local lastIndex = 1
 
-				local typeElement = type(element)
-
-				if typeElement == "function" or typeElement == "thread" then
-					pos += 1
-					continue
-				end
-
-				serialCache(element, typeElement)
-				continue
-			end
-			if not endArray and not isDict then
-				endArray = true
-				buf = inflate(buf, pos, 1)
-				buffer.writeu8(buf, pos, ARRAY_END)
-				pos += 1
-			end
-
-			-- Dictionary section
-			local typeKey = type(key)
-			if typeKey == "function" or typeKey == "thread" then
-				continue
-			end
+	for key, element in value do
+		-- Array section
+		if lastIndex == key then
+			lastIndex += 1
 
 			local typeElement = type(element)
+
 			if typeElement == "function" or typeElement == "thread" then
+				pos += 1
 				continue
 			end
 
-			local cached = existing[key]
-			if cached then
-				buf = inflate(buf, pos, 3)
-				buffer.writeu8(buf, pos, EQ_EXISTING)
-				buffer.writeu16(buf, pos + 1, cached)
-				pos += 3
-			else
-				-- store key
-				serialCache(key, typeKey)
-			end
+			serializer(element, buf, pos, typeElement)
 
-			cached = existing[element]
-			if cached then
-				buf = inflate(buf, pos, 3)
-				-- writebits is not faster
-				buffer.writeu8(buf, pos, EQ_EXISTING)
-				buffer.writeu16(buf, pos + 1, cached)
-				pos += 3
-				continue
-			end
-
-			-- store element
-			serialCache(element, typeElement)
+			continue
+		end
+		if not endArray and not isDict then
+			endArray = true
+			buf = inflate(buf, pos, 1)
+			buffer.writeu8(buf, pos, ARRAY_END)
+			pos += 1
 		end
 
-		if isDict then
-			buffer.writeu8(buf, oldPos - 1, DICT)
-		else
-			buffer.writeu8(buf, oldPos - 1, if not endArray then ARRAY else TABLE)
+		-- Dictionary section
+		local typeKey = type(key)
+		if typeKey == "function" or typeKey == "thread" then
+			continue
 		end
-		buf = inflate(buf, pos, 1)
-		buffer.writeu8(buf, pos, TABLE_END)
-		pos += 1
+
+		local typeElement = type(element)
+		if typeElement == "function" or typeElement == "thread" then
+			continue
+		end
+
+		buf, pos = serializer(key, buf, pos, typeKey)
+		buf, pos = serializer(element, buf, pos, typeElement)
 	end
 
-	serialTable(value)
-
-	table.clear(existing)
-	if roundRobinLength > 0 then
-		table.clear(roundRobinCache)
+	if isDict then
+		buffer.writeu8(buf, tableHeaderPos, DICT)
+	else
+		buffer.writeu8(buf, tableHeaderPos, if not endArray then ARRAY else TABLE)
 	end
+	buf = inflate(buf, pos, 1)
+	buffer.writeu8(buf, pos, TABLE_END)
 
-	return buf, pos
+	return buf, pos + 1
 end
 
 --[[
@@ -232,9 +137,24 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 		)
 	end
 
-	local existingIndex = 1
-	local existing: { any } = { [0] = returnedTab }
-	local roundRobinIndex = 61_440
+	local isRoot = existingBuffers[buf] == nil
+	local existingData = if not isRoot
+		then existingBuffers[buf] :: DeserExisting
+		else {
+			index = 1,
+			data = { [0] = returnedTab },
+			-- round robin
+			rr_index = 61_440,
+			paired = {},
+		}
+
+	if existingBuffers[buf] == nil then
+		existingBuffers[buf] = existingData
+	end
+
+	local existingIndex = existingData.index
+	local existing: { any } = existingData.data
+	local roundRobinIndex = existingData.rr_index
 
 	local deserialTable: (data: { [any]: any }) -> { [any]: any }
 
@@ -271,7 +191,19 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 		local value: any = nil
 		local oldPos = pos
 
+		local case = link.type(valId)
+
+		if case == "userdata" then
+			existingData.index = existingIndex
+			existingData.rr_index = roundRobinIndex
+		end
+
 		value, pos = link.deserializer(buf, pos, valId)
+
+		if case == "userdata" then
+			existingIndex = existingData.index
+			roundRobinIndex = existingData.rr_index
+		end
 
 		if pos - 2 > oldPos then
 			existingCache(value)
@@ -386,7 +318,12 @@ function tabDeserializer(buf: buffer, pos: number, valId: number)
 
 	local data = deserialTable(returnedTab, valId)
 
-	table.clear(existing)
+	if isRoot then
+		table.clear(existing)
+	else
+		existingData.index = existingIndex
+		existingData.rr_index = roundRobinIndex
+	end
 
 	return data, pos
 end

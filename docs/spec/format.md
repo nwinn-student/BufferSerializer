@@ -173,6 +173,10 @@ The table size is not stored by default, see [extension support](../extension.md
 
 Vectors have multiple modes: scalar multiple, multi-set (byte, char, tryte), and set.  Scalar multiple vectors are multiples of the constant vectors, thus they can be stored in less bytes.  The intent behind multiple modes is primarily to produce smaller output sizes.  Vectors are basically numerical arrays of size 3, so two common cases (multi-set and set) were chosen to account for all cases and then special cases (scalar multiple) get a fast path with little cost.
 
+**What are duplicate values and how are they handled?**
+
+Duplicate values are those that reference the same object in memory (`foo[bar] == foo[baz] and bar == baz`).  In order to store duplicate values, most values must be doubly stored, with the exception of those resulting in small output sizes except empty tables.  Further calls to the internal `table.serialize` function which implements duplicate values results in continued support of prior duplicate values and will hold so long as the buffer remains the same (or uses the internal `inflate` function).
+
 ## Design
 
 | Tag(s)  | Cost     | Type       | Description                                 |
